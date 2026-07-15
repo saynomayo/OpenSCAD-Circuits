@@ -1,0 +1,2 @@
+This project exists to create a simple place, drag, and connect system for OpenSCAD, specifically tailored towards 3D printed circuit/electronics.
+This project will also serve to validate preexisting designs
