@@ -15,86 +15,31 @@
   - Proves that the architecture for the project works thus far
 
 **7/16/25**
-Why is the application directory set up this way?
-Four responsibilities
-- User interacts
-- Editor
-- Application data
-- Rules & Algorithms
-- OpenSCAD Export
+- data models added to geometry
+  - trace
+  - pad
+  - substrate
+  - point
+- point is a representation of x and y coordinate
+- substrate has a center point? and then height and width added to it
+  - but currently it has explicit x and y
+  - instead a center should be given, and should represent the circuit platform
+  - all other objects must reside inside of the center of this platform
+  - so the substrate also influences a bounding box
+- pads have a center, alongside height and width
+- A trace is made up of points, with interpolated length between them
 
-**src/**
-- Code lives here
-**components/**
-- Reusable pieces of interface
-  - Toolbar
-  - Property Panel
-  - Object List
-  - Status Bar
-  - Error List
-  - Layer List
-- These are not specific to any drawing or part. Properties panel will just display properties of whatever is edited, regadless.
-**editor/**
-- This folder contains the CAD Editor
-  - Canvas
-  - Selection
-  - DragTool
-  - ZoomTool
-  - PanTool
-  - SnapManager
-- Electronics are a total black box to the editor
-**geometry**
-- This folder contains the math
-  - distance()
-  - intersects()
-  - rotatePoint()
-  - boundingBox()
-  - closesPointOnSegment()
-  - polygonIntersection()
-- Reusable algorithms
-- DRC, snapping system, routing, exporter will use these
-**drc/**
-- The design rule checker
-- doesn't draw anything, instead asks questions to each component of a drawing
-  - checkComponentType
-  - checkWidth
-  - checkHeight
-  - checkResistance
-  - checkClearance
-  - checkOverlaps
-- Every function in the DRC contains a list of violations
-- May also affect the scene to highlight where violations are present
-**export/**
-- Converts scene into other formats
-  - OpenSCAD to begin
-  - Later, 
-    - STL
-    - 3MF
-    - JSON
-    - SVG
-    - Netlist
-**model/**
-- Defines what exists in the world
-  - Pad
-  - Trace
-  - Substrate
-  - Connection
-  - Material
-  - Resistor
-  - Component gap
-- This is just data
-  - Pad may containt
-    - id
-    - pos
-    - width
-    - height
-    - material
-  - Only describes what a pad is, or any other existing model, but does not draw it
-**utils/**
-- Helper functions that don't necessary belong anywhere else
-**public/**
-- files copied direcltly into final website
-**tests/**
-- geometry.test.ts
-- drc.test.ts
-- export.test.ts
+- sampleScene.ts builds objects out of the geometry models, filling out the fields for each one
+
+- Canvas.tsx actually draws the SVG using the objects built from sampleScene
+  - uses objects.map((object)) to iterate through each object in an object list (function input) and places on SVG
+
+- App.tsx displays the app on the webpage. This calls Canvas function from Canvas.tsx with sampleScene.
+
+**TODO**
+- Add object selection **[X]**
+- upon selection, a panel opens **[]** and displayed selected object's information **[]**
+- Maybe instead of making an editor or circuit builder, the 
+
+
+

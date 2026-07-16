@@ -2,9 +2,10 @@ import type { SceneObject } from "../model/geometry";
 
 type CanvasProps = {
   objects: SceneObject[];
+  ObjectSelectedCallback: (string) => void;
 };
 
-export function Canvas({ objects }: CanvasProps) {
+export function Canvas({ objects, ObjectSelectedCallback }: CanvasProps) {
   return (
     <svg
       viewBox="0 0 600 400"
@@ -18,6 +19,10 @@ export function Canvas({ objects }: CanvasProps) {
           case "substrate":
             return (
               <rect
+              
+                onClick={() => {
+                ObjectSelectedCallback(object.id);
+                }}
                 key={object.id}
                 x={object.x}
                 y={object.y}
@@ -32,6 +37,9 @@ export function Canvas({ objects }: CanvasProps) {
           case "pad":
             return (
               <rect
+                onClick={() => {
+                    ObjectSelectedCallback(object.id);
+                }}
                 key={object.id}
                 x={object.center.x - object.width / 2}
                 y={object.center.y - object.height / 2}
@@ -46,6 +54,9 @@ export function Canvas({ objects }: CanvasProps) {
           case "trace":
             return (
               <polyline
+                onClick={() => {
+                    ObjectSelectedCallback(object.id);
+                }}
                 key={object.id}
                 points={object.points
                   .map((point) => `${point.x},${point.y}`)
