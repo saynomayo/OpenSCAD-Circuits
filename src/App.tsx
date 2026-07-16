@@ -1,10 +1,11 @@
-import './App.css'
+import { Canvas } from "./editor/Canvas";
+import { sampleScene } from "./model/sampleScene";
 
 function App() {
   return (
     <main>
       <h1>Printed Electronics CAD</h1>
-      <p>Visual circuit geometry editor</p>
+      <Canvas objects={sampleScene} />
     </main>
   );
 }
