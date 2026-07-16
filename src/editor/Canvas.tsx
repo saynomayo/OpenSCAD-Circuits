@@ -23,7 +23,7 @@ export function Canvas({ objects }: CanvasProps) {
                 y={object.y}
                 width={object.width}
                 height={object.height}
-                fill="none"
+                fill="white"
                 stroke="black"
                 strokeWidth={2}
               />
@@ -37,7 +37,7 @@ export function Canvas({ objects }: CanvasProps) {
                 y={object.center.y - object.height / 2}
                 width={object.width}
                 height={object.height}
-                fill="silver"
+                fill="black"
                 stroke="black"
                 strokeWidth={2}
               />
@@ -53,7 +53,7 @@ export function Canvas({ objects }: CanvasProps) {
                 fill="none"
                 stroke="black"
                 strokeWidth={object.width}
-                strokeLinecap="round"
+                strokeLinecap="square"
                 strokeLinejoin="round"
               />
             );

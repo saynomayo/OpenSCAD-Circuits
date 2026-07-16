@@ -37,6 +37,6 @@ export const sampleScene: SceneObject[] = [
       { x: 300, y: 200 },
       { x: 425, y: 200 },
     ],
-    width: 12,
+    width: 25,
   },
 ];
