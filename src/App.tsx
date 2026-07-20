@@ -1,15 +1,25 @@
 import { Canvas } from "./editor/Canvas";
 import { sampleScene } from "./model/sampleScene";
 import { useState } from 'react';
+import { InformationPanel } from "./components/InformationPanel";
+import "./styling/App.css"
+import { ObjectBanner } from "./components/ObjectBanner";
 
 function App() {
-  const [selectedObject, setSelectedObject] = useState(null);
+  const [selectedObjectID, setSelectedObject] = useState<string>(null);
+  const selectedObject = sampleScene.find((object) => selectedObjectID === object.id);
   return (
-    <main>
-      <h1>Printed Electronics CAD</h1>
-      <p>Selected: {selectedObject}</p>
-      <Canvas objects={sampleScene} ObjectSelectedCallback={setSelectedObject}/>
-    </main>
+    <div className="app">
+      <div className="banner">
+        <ObjectBanner pad={null} trace={null}/>
+      </div>
+      <div className="side-panel">
+        <InformationPanel object={selectedObject}/>
+      </div>
+      <div className="canvas">
+        <Canvas objects={sampleScene} ObjectSelectedCallback={setSelectedObject}/>
+      </div>
+    </div>
   );
 }
 

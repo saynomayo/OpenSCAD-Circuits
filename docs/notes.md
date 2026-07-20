@@ -41,5 +41,9 @@
 - upon selection, a panel opens **[]** and displayed selected object's information **[]**
 - Maybe instead of making an editor or circuit builder, the 
 
+**7/20/26**
+- Project will require a structural overhaul
+
+
 
 
