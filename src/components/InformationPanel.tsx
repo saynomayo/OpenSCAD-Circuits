@@ -40,7 +40,18 @@ export function InformationPanel({object}: InformationPanelProps) {
                 className="ui-panel">
                 <div className="panel-header">Object Information</div>
                 <div className="panel-body"><p>Object: {object.id}</p></div>
-                <div className="panel-footer">Object Type: {object.type}<br />Points: <li></li><br /></div>
+                <div className="panel-footer">Object Type: {object.type}
+                    <br />
+                    Num of Points: {object.points.length} 
+                    <div style={{color:"black"}}><ul>
+                        {object.points.map((point, index) => (
+                            <li key={index}>
+                                Point: {point.id}: X Pos: {point.x}, Y Pos: {point.y}
+                            </li>
+                        ))}
+                    </ul></div>
+                    <br />
+                </div>
                 </div>
             );
     }
