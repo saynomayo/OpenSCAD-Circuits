@@ -15,12 +15,33 @@ export function InformationPanel({object}: InformationPanelProps) {
             </div>
         )
     }
-    return (
-        <div 
-        className="ui-panel">
-        <div className="panel-header">Object Information</div>
-        <div className="panel-body"><p>Object: {object.id}</p></div>
-        <div className="panel-footer">Object Type: {object.type}</div>
-        </div>
-    );
+    switch(object.type) {
+        case "substrate":
+            return (
+                <div 
+                className="ui-panel">
+                <div className="panel-header">Object Information</div>
+                <div className="panel-body"><p>Object: {object.id}</p></div>
+                <div className="panel-footer">Object Type: {object.type}</div>
+                </div>
+            );
+        case "pad":
+            return (
+                <div 
+                className="ui-panel">
+                <div className="panel-header">Object Information</div>
+                <div className="panel-body"><p>Object: {object.id}</p></div>
+                <div className="panel-footer">Object Type: {object.type}<br />X Pos: <input type="number" value={object.center.x}></input><br />Y Pos:<input type="number" value={object.center.y}></input></div>
+                </div>
+            );
+        case "trace":
+            return (
+                <div 
+                className="ui-panel">
+                <div className="panel-header">Object Information</div>
+                <div className="panel-body"><p>Object: {object.id}</p></div>
+                <div className="panel-footer">Object Type: {object.type}<br />Points: <li></li><br /></div>
+                </div>
+            );
+    }
 }

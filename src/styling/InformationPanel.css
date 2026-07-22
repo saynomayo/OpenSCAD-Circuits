@@ -1,12 +1,13 @@
 .ui-panel {
-    display: flex;
-    flex-direction: column;
+    display: block;
+    flex-direction: row;
     background-color: #e1e1e1;
     border: 3px solid #272727;
     border-radius: 12px;
     box-shadow: 6px 4px 6px rgba(0, 0, 0, 0.1);
     overflow: hidden;
-    max-width: 200px
+    width: 750px;
+    max-height: 200px
 }
 
 .panel-header {
