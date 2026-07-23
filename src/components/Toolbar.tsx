@@ -1,8 +1,8 @@
 import "../styling/Banner.css"
 
 type toolbarProps = {
-    toolbarClickCallback: (string) => void;
-    selectedTool: (string);
+    toolbarClickCallback: (tool: "select" | "pad" | "trace") => void;
+    selectedTool: "select" | "pad" | "trace";
 };
 
 export function Toolbar({toolbarClickCallback, selectedTool}: toolbarProps) {
