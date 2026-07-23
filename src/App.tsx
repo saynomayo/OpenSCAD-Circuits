@@ -151,6 +151,7 @@ function App() {
           objectDeleteCallback={deleteObject}
         />
       </main>
+      <div className="canvas-hint">Scroll to zoom · Drag empty space or hold Space to pan</div>
     </div>
   );
 }

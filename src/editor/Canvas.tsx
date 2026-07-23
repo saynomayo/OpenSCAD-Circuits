@@ -1,4 +1,5 @@
-import type { MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import type { Point, SceneObject } from "../model/geometry";
 import { padEdgePoint } from "../model/geometry";
 
@@ -14,7 +15,60 @@ type CanvasProps = {
 };
 
 export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, objectSelectedCallback, canvasClickCallback, padConnectionCallback, objectDeleteCallback }: CanvasProps) {
+  const canvasRef = useRef<SVGSVGElement>(null);
+  const [camera, setCamera] = useState({ centerX: 300, centerY: 200, zoom: 1 });
+  const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 });
+  const panState = useRef<{ pointerID: number; clientX: number; clientY: number; centerX: number; centerY: number } | null>(null);
+  const spacePressed = useRef(false);
+  const suppressNextClick = useRef(false);
+
+  const viewWidth = 600 / camera.zoom;
+  const viewHeight = viewWidth * canvasSize.height / canvasSize.width;
+  const viewX = camera.centerX - viewWidth / 2;
+  const viewY = camera.centerY - viewHeight / 2;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+        setCanvasSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      }
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.code === "Space") {
+        spacePressed.current = true;
+        if (event.target === document.body) event.preventDefault();
+      }
+    }
+    function handleKeyUp(event: KeyboardEvent) {
+      if (event.code === "Space") spacePressed.current = false;
+    }
+    function handleBlur() {
+      spacePressed.current = false;
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
   function handleCanvasClick(event: MouseEvent<SVGSVGElement>) {
+    if (suppressNextClick.current) {
+      suppressNextClick.current = false;
+      return;
+    }
     if (activeTool === "select") return;
 
     const svg = event.currentTarget;
@@ -23,6 +77,64 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
     point.y = event.clientY;
     const canvasPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
     canvasClickCallback(canvasPoint.x, canvasPoint.y);
+  }
+
+  function handleWheel(event: WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const normalizedX = (event.clientX - bounds.left) / bounds.width - 0.5;
+    const normalizedY = (event.clientY - bounds.top) / bounds.height - 0.5;
+    const worldX = camera.centerX + normalizedX * viewWidth;
+    const worldY = camera.centerY + normalizedY * viewHeight;
+    const nextZoom = Math.min(8, Math.max(0.25, camera.zoom * Math.exp(-event.deltaY * 0.0015)));
+    const nextWidth = 600 / nextZoom;
+    const nextHeight = nextWidth * canvasSize.height / canvasSize.width;
+
+    setCamera({
+      zoom: nextZoom,
+      centerX: worldX - normalizedX * nextWidth,
+      centerY: worldY - normalizedY * nextHeight,
+    });
+  }
+
+  function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
+    const target = event.target as SVGElement;
+    const isBackground = target === event.currentTarget || target.dataset.canvasBackground === "true";
+    const canPan = event.button === 1 || (event.button === 0 && spacePressed.current) || (event.button === 0 && activeTool === "select" && isBackground);
+    if (!canPan) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panState.current = {
+      pointerID: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      centerX: camera.centerX,
+      centerY: camera.centerY,
+    };
+  }
+
+  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    const pan = panState.current;
+    if (pan === null || pan.pointerID !== event.pointerId) return;
+    const dx = event.clientX - pan.clientX;
+    const dy = event.clientY - pan.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) suppressNextClick.current = true;
+    setCamera((current) => ({
+      ...current,
+      centerX: pan.centerX - dx * viewWidth / canvasSize.width,
+      centerY: pan.centerY - dy * viewHeight / canvasSize.height,
+    }));
+  }
+
+  function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (panState.current?.pointerID !== event.pointerId) return;
+    panState.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function resetCamera() {
+    setCamera({ centerX: 300, centerY: 200, zoom: 1 });
   }
 
   function handleObjectClick(event: MouseEvent<SVGElement>, object: SceneObject) {
@@ -53,12 +165,18 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
 
   return (
     <svg
-      viewBox="0 0 600 400"
-      preserveAspectRatio="xMidYMid meet"
+      ref={canvasRef}
+      viewBox={`${viewX} ${viewY} ${viewWidth} ${viewHeight}`}
       role="img"
       aria-label="Printed electronics design canvas"
       onClick={handleCanvasClick}
-      style={{ cursor: activeTool === "select" ? "default" : activeTool === "delete" ? "pointer" : "crosshair" }}
+      onWheel={handleWheel}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onDoubleClick={activeTool === "select" ? resetCamera : undefined}
+      style={{ cursor: activeTool === "select" ? "grab" : activeTool === "delete" ? "pointer" : "crosshair", touchAction: "none" }}
     >
       <defs>
         <pattern id="minor-grid" width="10" height="10" patternUnits="userSpaceOnUse">
@@ -69,8 +187,8 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
           <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#c9d2dc" strokeWidth="0.55" />
         </pattern>
       </defs>
-      <rect width="600" height="400" fill="#edf1f5" />
-      <rect width="600" height="400" fill="url(#major-grid)" />
+      <rect data-canvas-background="true" x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="#edf1f5" />
+      <rect data-canvas-background="true" x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="url(#major-grid)" />
       {objects.map((object) => {
         switch (object.type) {
           case "substrate":
