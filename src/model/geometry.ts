@@ -71,9 +71,9 @@ export type Point = {
     ];
   }
 
-  function connectionPort(pad: Pad, otherPad: Pad, id: string): Point {
-    const dx = otherPad.center.x - pad.center.x;
-    const dy = otherPad.center.y - pad.center.y;
+  function connectionPortToward(pad: Pad, target: Point, id: string): Point {
+    const dx = target.x - pad.center.x;
+    const dy = target.y - pad.center.y;
     const horizontalDirection = Math.sign(dx) || 1;
     const verticalDirection = Math.sign(dy) || 1;
 
@@ -93,8 +93,8 @@ export type Point = {
   }
 
   export function buildTracePath(startPad: Pad, endPad: Pad, waypoints: Point[], traceID: string): Point[] {
-    const startPort = connectionPort(startPad, endPad, `${traceID}-start`);
-    const endPort = connectionPort(endPad, startPad, `${traceID}-end`);
+    const startPort = connectionPortToward(startPad, endPad.center, `${traceID}-start`);
+    const endPort = connectionPortToward(endPad, startPad.center, `${traceID}-end`);
     const targets = [startPort, ...waypoints, endPort];
     const routed = targets.slice(0, -1).flatMap((point, index) => {
       const segment = octilinearSegment(point, targets[index + 1]);
@@ -104,4 +104,15 @@ export type Point = {
     if (routed.length < 2) return [];
 
     return routed.map((point, index) => ({ ...point, id: `${traceID}-point-${index}` }));
+  }
+
+  export function buildOpenTracePath(startPad: Pad, waypoints: Point[], cursor: Point): Point[] {
+    const firstTarget = waypoints[0] ?? cursor;
+    const startPort = connectionPortToward(startPad, firstTarget, "draft-start");
+    const targets = [startPort, ...waypoints, cursor];
+
+    return targets.slice(0, -1).flatMap((point, index) => {
+      const segment = octilinearSegment(point, targets[index + 1]);
+      return index === 0 ? segment : segment.slice(1);
+    }).map((point, index) => ({ ...point, id: `draft-point-${index}` }));
   }

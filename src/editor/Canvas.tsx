@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent, WheelEvent } from "react";
 import type { Point, SceneObject } from "../model/geometry";
-import { padEdgePoint } from "../model/geometry";
+import { buildOpenTracePath } from "../model/geometry";
 
 type CanvasProps = {
   objects: SceneObject[];
@@ -19,6 +19,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   const canvasRef = useRef<SVGSVGElement>(null);
   const [camera, setCamera] = useState({ centerX: 300, centerY: 200, zoom: 1 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 });
+  const [traceCursor, setTraceCursor] = useState<Point | null>(null);
   const panState = useRef<{ pointerID: number; clientX: number; clientY: number; centerX: number; centerY: number } | null>(null);
   const objectDragState = useRef<{ pointerID: number; objectID: string; clientX: number; clientY: number } | null>(null);
   const spacePressed = useRef(false);
@@ -28,6 +29,8 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   const viewHeight = viewWidth * canvasSize.height / canvasSize.width;
   const viewX = camera.centerX - viewWidth / 2;
   const viewY = camera.centerY - viewHeight / 2;
+  const sceneScale = 1 + objects.length / 8;
+  const minimumZoom = Math.max(0.005, 0.25 / (sceneScale * sceneScale));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,7 +91,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
     const normalizedY = (event.clientY - bounds.top) / bounds.height - 0.5;
     const worldX = camera.centerX + normalizedX * viewWidth;
     const worldY = camera.centerY + normalizedY * viewHeight;
-    const nextZoom = Math.min(8, Math.max(0.25, camera.zoom * Math.exp(-event.deltaY * 0.0015)));
+    const nextZoom = Math.min(8, Math.max(minimumZoom, camera.zoom * Math.exp(-event.deltaY * 0.0015)));
     const nextWidth = 600 / nextZoom;
     const nextHeight = nextWidth * canvasSize.height / canvasSize.width;
 
@@ -134,15 +137,26 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
     }
 
     const pan = panState.current;
-    if (pan === null || pan.pointerID !== event.pointerId) return;
-    const dx = event.clientX - pan.clientX;
-    const dy = event.clientY - pan.clientY;
-    if (Math.abs(dx) + Math.abs(dy) > 3) suppressNextClick.current = true;
-    setCamera((current) => ({
-      ...current,
-      centerX: pan.centerX - dx * viewWidth / canvasSize.width,
-      centerY: pan.centerY - dy * viewHeight / canvasSize.height,
-    }));
+    if (pan !== null && pan.pointerID === event.pointerId) {
+      const dx = event.clientX - pan.clientX;
+      const dy = event.clientY - pan.clientY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) suppressNextClick.current = true;
+      setCamera((current) => ({
+        ...current,
+        centerX: pan.centerX - dx * viewWidth / canvasSize.width,
+        centerY: pan.centerY - dy * viewHeight / canvasSize.height,
+      }));
+      return;
+    }
+
+    if (activeTool === "trace" && traceDraft !== null) {
+      const svg = event.currentTarget;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const canvasPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
+      setTraceCursor({ id: "trace-cursor", x: canvasPoint.x, y: canvasPoint.y });
+    }
   }
 
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
@@ -156,10 +170,6 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
     if (panState.current?.pointerID !== event.pointerId) return;
     panState.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
-  }
-
-  function resetCamera() {
-    setCamera({ centerX: 300, centerY: 200, zoom: 1 });
   }
 
   function handleObjectClick(event: MouseEvent<SVGElement>, object: SceneObject) {
@@ -202,8 +212,8 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   const draftStartPad = traceDraft === null
     ? undefined
     : objects.find((object) => object.id === traceDraft.startPadId && object.type === "pad");
-  const draftPoints = draftStartPad?.type === "pad" && traceDraft && traceDraft.waypoints.length > 0
-    ? [padEdgePoint(draftStartPad, traceDraft.waypoints[0]), ...traceDraft.waypoints]
+  const draftPoints = draftStartPad?.type === "pad" && traceDraft && traceCursor
+    ? buildOpenTracePath(draftStartPad, traceDraft.waypoints, traceCursor)
     : [];
   const renderOrder = { substrate: 0, trace: 1, pad: 2 } as const;
   const renderedObjects = [...objects].sort((a, b) => renderOrder[a.type] - renderOrder[b.type]);
@@ -220,7 +230,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      onDoubleClick={activeTool === "select" ? resetCamera : undefined}
+      onPointerLeave={() => setTraceCursor(null)}
       style={{ cursor: activeTool === "select" ? "grab" : activeTool === "delete" ? "pointer" : "crosshair", touchAction: "none" }}
     >
       <defs>
@@ -337,14 +347,40 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
             points={draftPoints.map((point) => `${point.x},${point.y}`).join(" ")}
             fill="none"
             stroke="#1687d9"
-            strokeWidth={4}
-            strokeDasharray="7 5"
+            strokeWidth={25}
+            strokeOpacity={0.55}
             strokeLinecap="square"
             strokeLinejoin="round"
           />
           {traceDraft?.waypoints.map((point) => (
             <circle key={point.id} cx={point.x} cy={point.y} r={3.5} fill="#ffffff" stroke="#1687d9" strokeWidth={1.5} />
           ))}
+          <circle cx={draftPoints.at(-1)?.x} cy={draftPoints.at(-1)?.y} r={4} fill="#ffffff" stroke="#0868ad" strokeWidth={1.5} />
+          {objects.filter((object) => object.type === "pad").map((pad) => pad.type === "pad" && (
+            <rect
+              key={`draft-cover-${pad.id}`}
+              x={pad.center.x - pad.width / 2}
+              y={pad.center.y - pad.height / 2}
+              width={pad.width}
+              height={pad.height}
+              fill="#218ed5"
+              stroke="#0868ad"
+              strokeWidth={1.5}
+            />
+          ))}
+          {draftStartPad?.type === "pad" && (
+            <rect
+              x={draftStartPad.center.x - draftStartPad.width / 2}
+              y={draftStartPad.center.y - draftStartPad.height / 2}
+              width={draftStartPad.width}
+              height={draftStartPad.height}
+              fill="#ffffff"
+              fillOpacity={0.22}
+              stroke="#00a6c8"
+              strokeWidth={3}
+              strokeDasharray="5 3"
+            />
+          )}
         </g>
       )}
     </svg>

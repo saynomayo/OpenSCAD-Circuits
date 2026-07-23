@@ -6,6 +6,7 @@ import { Toolbar } from "./components/Toolbar";
 import "./styling/App.css"
 import type { Point } from "./model/geometry";
 import { buildTracePath } from "./model/geometry";
+import { downloadScene, loadStoredScene, storeScene } from "./model/scene";
 
 type TraceDraft = {
   startPadId: string;
@@ -15,12 +16,21 @@ type TraceDraft = {
 type Tool = "select" | "pad" | "trace" | "delete";
 
 function App() {
-  const [scene, setScene] = useState(() => sampleScene);
+  const [scene, setScene] = useState(() => loadStoredScene() ?? sampleScene);
   const [selectedObjectID, setSelectedObject] = useState<string | null>(null);
   const selectedObject = scene.find((object) => selectedObjectID === object.id);
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [traceDraft, setTraceDraft] = useState<TraceDraft | null>(null);
-  const nextObjectNumber = useRef(sampleScene.length + 1);
+  const nextObjectNumber = useRef(
+    scene.reduce((highest, object) => {
+      const suffix = Number(object.id.match(/(\d+)$/)?.[1] ?? 0);
+      return Math.max(highest, suffix);
+    }, 0) + 1,
+  );
+
+  useEffect(() => {
+    storeScene(scene);
+  }, [scene]);
 
   function selectTool(tool: Tool) {
     if (tool !== "trace") setTraceDraft(null);
@@ -172,7 +182,7 @@ function App() {
         </div>
       </div>
       <div className="toolbar-layer">
-        <Toolbar toolbarClickCallback={selectTool} selectedTool={activeTool}/>
+        <Toolbar toolbarClickCallback={selectTool} selectedTool={activeTool} exportCallback={() => downloadScene(scene)}/>
       </div>
       <aside className="panel-layer">
         <InformationPanel object={selectedObject} activeTool={activeTool} traceStartPadID={traceDraft?.startPadId ?? null}/>

@@ -3,9 +3,10 @@ import "../styling/Banner.css"
 type toolbarProps = {
     toolbarClickCallback: (tool: "select" | "pad" | "trace" | "delete") => void;
     selectedTool: "select" | "pad" | "trace" | "delete";
+    exportCallback: () => void;
 };
 
-export function Toolbar({toolbarClickCallback, selectedTool}: toolbarProps) {
+export function Toolbar({toolbarClickCallback, selectedTool, exportCallback}: toolbarProps) {
     return (
         <nav className="tool-palette" aria-label="Editor tools">
             <button className={`tool-button ${selectedTool === "select" ? "active" : ""}`} onClick={() => toolbarClickCallback("select")} aria-pressed={selectedTool === "select"} title="Select objects">
@@ -25,6 +26,11 @@ export function Toolbar({toolbarClickCallback, selectedTool}: toolbarProps) {
             <button className={`tool-button delete-tool ${selectedTool === "delete" ? "active" : ""}`} onClick={() => toolbarClickCallback("delete")} aria-pressed={selectedTool === "delete"} title="Delete objects">
                 <svg className="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/></svg>
                 Delete
+            </button>
+            <span className="tool-divider" aria-hidden="true" />
+            <button className="tool-button" onClick={exportCallback} title="Export scene data as JSON">
+                <svg className="tool-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+                Export
             </button>
         </nav>
     )
