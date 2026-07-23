@@ -1,21 +1,68 @@
-.ui-banner {
-    display: flex; 
-    flex-direction: row;
-    background-color: #e1e1e1;
-    border: 3px solid #272727;
-    border-radius: 12px;
-    box-shadow: 6px 4px 6px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    width: 750px
+.tool-palette {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid rgba(202, 212, 222, 0.9);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
 }
 
-.selected-tool {
-    display: flex; 
-    flex-direction: row;
-    background-color: #e9e9e9;
-    border: 3px solid #272727;
-    border-radius: 6px;
-    box-shadow: 6px 4px 6px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    width: 45px
+.tool-button {
+  display: flex;
+  min-width: 68px;
+  height: 48px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #596779;
+  font-size: 12px;
+  font-weight: 650;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.tool-button:hover {
+  color: var(--ink);
+  background: #f4f7f9;
+}
+
+.tool-button:active {
+  transform: translateY(1px);
+}
+
+.tool-button.active {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border-color: #b9ddf4;
+}
+
+.tool-button.delete-tool:hover {
+  color: #a33c45;
+  background: #fff2f3;
+}
+
+.tool-button.delete-tool.active {
+  color: #9f303a;
+  background: #fff0f1;
+  border-color: #f1c5c9;
+}
+
+.tool-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.tool-divider {
+  width: 1px;
+  height: 28px;
+  margin: 0 3px;
+  background: var(--line);
 }

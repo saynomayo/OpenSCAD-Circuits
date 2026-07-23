@@ -34,6 +34,8 @@ export const sampleScene: SceneObject[] = [
   {
     id: "trace-1",
     type: "trace",
+    startPadId: "pad-1",
+    endPadId: "pad-2",
     points: [
       { id: "trace-1-1", x: 175, y: 200 },
       { id: "trace-1-2", x: 300, y: 200 },
