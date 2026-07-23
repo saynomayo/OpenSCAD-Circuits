@@ -5,7 +5,7 @@ import { InformationPanel } from "./components/InformationPanel";
 import { Toolbar } from "./components/Toolbar";
 import "./styling/App.css"
 import type { Point } from "./model/geometry";
-import { padEdgePoint } from "./model/geometry";
+import { buildTracePath } from "./model/geometry";
 
 type TraceDraft = {
   startPadId: string;
@@ -101,14 +101,8 @@ function App() {
       return;
     }
 
-    const firstTarget = traceDraft.waypoints[0] ?? pad.center;
-    const lastTarget = traceDraft.waypoints.at(-1) ?? startPad.center;
     const id = `trace-${nextObjectNumber.current++}`;
-    const points = [
-      { ...padEdgePoint(startPad, firstTarget), id: `${id}-start` },
-      ...traceDraft.waypoints,
-      { ...padEdgePoint(pad, lastTarget), id: `${id}-end` },
-    ];
+    const points = buildTracePath(startPad, pad, traceDraft.waypoints, id);
 
     setScene((objects) => [
       ...objects,
@@ -117,12 +111,56 @@ function App() {
         type: "trace",
         startPadId: startPad.id,
         endPadId: pad.id,
+        waypoints: traceDraft.waypoints,
         points,
         width: 25,
       },
     ]);
     setTraceDraft(null);
     setSelectedObject(id);
+  }
+
+  function moveObject(objectID: string, dx: number, dy: number) {
+    setScene((objects) => {
+      const movedObjects = objects.map((object) => {
+        if (object.id === objectID && object.type === "pad") {
+          return {
+            ...object,
+            center: { ...object.center, x: object.center.x + dx, y: object.center.y + dy },
+          };
+        }
+
+        if (object.id === objectID && object.type === "trace") {
+          const baseWaypoints = object.waypoints.length > 0
+            ? object.waypoints
+            : [{
+                id: `${object.id}-waypoint-1`,
+                x: (object.points[0].x + object.points.at(-1)!.x) / 2,
+                y: (object.points[0].y + object.points.at(-1)!.y) / 2,
+              }];
+          return {
+            ...object,
+            waypoints: baseWaypoints.map((point) => ({
+              ...point,
+              x: point.x + dx,
+              y: point.y + dy,
+            })),
+          };
+        }
+        return object;
+      });
+
+      return movedObjects.map((object) => {
+        if (object.type !== "trace") return object;
+        const startPad = movedObjects.find((candidate) => candidate.id === object.startPadId);
+        const endPad = movedObjects.find((candidate) => candidate.id === object.endPadId);
+        if (startPad?.type !== "pad" || endPad?.type !== "pad") return object;
+        return {
+          ...object,
+          points: buildTracePath(startPad, endPad, object.waypoints, object.id),
+        };
+      });
+    });
   }
   return (
     <div className="app">
@@ -149,6 +187,7 @@ function App() {
           canvasClickCallback={placeObject}
           padConnectionCallback={connectPad}
           objectDeleteCallback={deleteObject}
+          objectMoveCallback={moveObject}
         />
       </main>
       <div className="canvas-hint">Scroll to zoom · Drag empty space or hold Space to pan</div>

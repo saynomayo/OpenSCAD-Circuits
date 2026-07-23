@@ -26,6 +26,7 @@ export type Point = {
     type: "trace";
     startPadId: string;
     endPadId: string;
+    waypoints: Point[];
     points: Point[];
     width: number;
   };
@@ -50,4 +51,57 @@ export type Point = {
       x: pad.center.x + dx * scale,
       y: pad.center.y + dy * scale,
     };
+  }
+
+  function octilinearSegment(start: Point, end: Point): Point[] {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const diagonalDistance = Math.min(Math.abs(dx), Math.abs(dy));
+
+    if (diagonalDistance === 0 || Math.abs(dx) === Math.abs(dy)) return [start, end];
+
+    return [
+      start,
+      {
+        id: "route-bend",
+        x: start.x + Math.sign(dx) * diagonalDistance,
+        y: start.y + Math.sign(dy) * diagonalDistance,
+      },
+      end,
+    ];
+  }
+
+  function connectionPort(pad: Pad, otherPad: Pad, id: string): Point {
+    const dx = otherPad.center.x - pad.center.x;
+    const dy = otherPad.center.y - pad.center.y;
+    const horizontalDirection = Math.sign(dx) || 1;
+    const verticalDirection = Math.sign(dy) || 1;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return {
+        id,
+        x: pad.center.x + horizontalDirection * pad.width / 2,
+        y: pad.center.y,
+      };
+    }
+
+    return {
+      id,
+      x: pad.center.x,
+      y: pad.center.y + verticalDirection * pad.height / 2,
+    };
+  }
+
+  export function buildTracePath(startPad: Pad, endPad: Pad, waypoints: Point[], traceID: string): Point[] {
+    const startPort = connectionPort(startPad, endPad, `${traceID}-start`);
+    const endPort = connectionPort(endPad, startPad, `${traceID}-end`);
+    const targets = [startPort, ...waypoints, endPort];
+    const routed = targets.slice(0, -1).flatMap((point, index) => {
+      const segment = octilinearSegment(point, targets[index + 1]);
+      return index === 0 ? segment : segment.slice(1);
+    });
+
+    if (routed.length < 2) return [];
+
+    return routed.map((point, index) => ({ ...point, id: `${traceID}-point-${index}` }));
   }

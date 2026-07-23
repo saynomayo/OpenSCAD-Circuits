@@ -12,13 +12,15 @@ type CanvasProps = {
   canvasClickCallback: (x: number, y: number) => void;
   padConnectionCallback: (id: string) => void;
   objectDeleteCallback: (id: string) => void;
+  objectMoveCallback: (id: string, dx: number, dy: number) => void;
 };
 
-export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, objectSelectedCallback, canvasClickCallback, padConnectionCallback, objectDeleteCallback }: CanvasProps) {
+export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, objectSelectedCallback, canvasClickCallback, padConnectionCallback, objectDeleteCallback, objectMoveCallback }: CanvasProps) {
   const canvasRef = useRef<SVGSVGElement>(null);
   const [camera, setCamera] = useState({ centerX: 300, centerY: 200, zoom: 1 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 400 });
   const panState = useRef<{ pointerID: number; clientX: number; clientY: number; centerX: number; centerY: number } | null>(null);
+  const objectDragState = useRef<{ pointerID: number; objectID: string; clientX: number; clientY: number } | null>(null);
   const spacePressed = useRef(false);
   const suppressNextClick = useRef(false);
 
@@ -115,6 +117,22 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   }
 
   function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
+    const objectDrag = objectDragState.current;
+    if (objectDrag !== null && objectDrag.pointerID === event.pointerId) {
+      const dx = event.clientX - objectDrag.clientX;
+      const dy = event.clientY - objectDrag.clientY;
+      if (Math.abs(dx) + Math.abs(dy) < 1) return;
+      suppressNextClick.current = true;
+      objectMoveCallback(
+        objectDrag.objectID,
+        dx * viewWidth / canvasSize.width,
+        dy * viewHeight / canvasSize.height,
+      );
+      objectDrag.clientX = event.clientX;
+      objectDrag.clientY = event.clientY;
+      return;
+    }
+
     const pan = panState.current;
     if (pan === null || pan.pointerID !== event.pointerId) return;
     const dx = event.clientX - pan.clientX;
@@ -128,6 +146,13 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   }
 
   function handlePointerUp(event: PointerEvent<SVGSVGElement>) {
+    if (objectDragState.current?.pointerID === event.pointerId) {
+      objectDragState.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
     if (panState.current?.pointerID !== event.pointerId) return;
     panState.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
@@ -138,6 +163,11 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
   }
 
   function handleObjectClick(event: MouseEvent<SVGElement>, object: SceneObject) {
+    if (suppressNextClick.current) {
+      suppressNextClick.current = false;
+      event.stopPropagation();
+      return;
+    }
     if (activeTool === "select") {
       event.stopPropagation();
       objectSelectedCallback(object.id);
@@ -156,12 +186,27 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
     }
   }
 
+  function handleObjectPointerDown(event: PointerEvent<SVGGElement>, object: SceneObject) {
+    if (activeTool !== "select" || selectedObjectID !== object.id || object.type === "substrate" || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    canvasRef.current?.setPointerCapture(event.pointerId);
+    objectDragState.current = {
+      pointerID: event.pointerId,
+      objectID: object.id,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+  }
+
   const draftStartPad = traceDraft === null
     ? undefined
     : objects.find((object) => object.id === traceDraft.startPadId && object.type === "pad");
   const draftPoints = draftStartPad?.type === "pad" && traceDraft && traceDraft.waypoints.length > 0
     ? [padEdgePoint(draftStartPad, traceDraft.waypoints[0]), ...traceDraft.waypoints]
     : [];
+  const renderOrder = { substrate: 0, trace: 1, pad: 2 } as const;
+  const renderedObjects = [...objects].sort((a, b) => renderOrder[a.type] - renderOrder[b.type]);
 
   return (
     <svg
@@ -189,7 +234,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
       </defs>
       <rect data-canvas-background="true" x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="#edf1f5" />
       <rect data-canvas-background="true" x={viewX} y={viewY} width={viewWidth} height={viewHeight} fill="url(#major-grid)" />
-      {objects.map((object) => {
+      {renderedObjects.map((object) => {
         switch (object.type) {
           case "substrate":
             return (
@@ -221,7 +266,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
 
           case "pad":
             return (
-              <g key={object.id} onClick={(event) => handleObjectClick(event, object)}>
+              <g key={object.id} onClick={(event) => handleObjectClick(event, object)} onPointerDown={(event) => handleObjectPointerDown(event, object)} style={{ cursor: activeTool === "select" && selectedObjectID === object.id ? "move" : undefined }}>
                 <rect
                   x={object.center.x - object.width / 2}
                   y={object.center.y - object.height / 2}
@@ -250,14 +295,14 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
 
           case "trace":
             return (
-              <g key={object.id} onClick={(event) => handleObjectClick(event, object)}>
+              <g key={object.id} onClick={(event) => handleObjectClick(event, object)} onPointerDown={(event) => handleObjectPointerDown(event, object)} style={{ cursor: activeTool === "select" && selectedObjectID === object.id ? "move" : undefined }}>
                 {selectedObjectID === object.id && (
                   <polyline
                     points={object.points.map((point) => `${point.x},${point.y}`).join(" ")}
                     fill="none"
                     stroke="#075d9b"
                     strokeWidth={object.width + 5}
-                    strokeLinecap="butt"
+                    strokeLinecap="square"
                     strokeLinejoin="round"
                     pointerEvents="none"
                   />
@@ -267,7 +312,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
                   fill="none"
                   stroke="#1687d9"
                   strokeWidth={object.width}
-                  strokeLinecap="butt"
+                  strokeLinecap="square"
                   strokeLinejoin="round"
                 />
                 {selectedObjectID === object.id && (
@@ -277,7 +322,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
                     stroke="#ffffff"
                     strokeOpacity={0.2}
                     strokeWidth={object.width}
-                    strokeLinecap="butt"
+                    strokeLinecap="square"
                     strokeLinejoin="round"
                     pointerEvents="none"
                   />
@@ -294,7 +339,7 @@ export function Canvas({ objects, activeTool, selectedObjectID, traceDraft, obje
             stroke="#1687d9"
             strokeWidth={4}
             strokeDasharray="7 5"
-            strokeLinecap="butt"
+            strokeLinecap="square"
             strokeLinejoin="round"
           />
           {traceDraft?.waypoints.map((point) => (
