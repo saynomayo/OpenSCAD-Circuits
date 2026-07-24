@@ -1,4 +1,5 @@
-import type { Pad, Point, SceneObject, Substrate, Trace } from "./geometry";
+import type { Dip, Pad, Point, SceneObject, Substrate, Trace } from "./geometry";
+import { createDipPins } from "./geometry";
 
 export const SCENE_STORAGE_KEY = "openscad-circuits.scene.v1";
 
@@ -20,6 +21,16 @@ export type CircuitDocument = {
       y: number;
       width: number;
       height: number;
+    }>;
+    dips: Array<{
+      id: string;
+      x: number;
+      y: number;
+      padCount: number;
+      padWidth: number;
+      padHeight: number;
+      columnSpacing: number;
+      pitch: number;
     }>;
     traces: Array<{
       id: string;
@@ -45,6 +56,9 @@ export function serializeScene(objects: SceneObject[]): CircuitDocument {
       pads: objects
         .filter((object): object is Pad => object.type === "pad")
         .map(({ id, center, width, height }) => ({ id, x: center.x, y: center.y, width, height })),
+      dips: objects
+        .filter((object): object is Dip => object.type === "dip")
+        .map(({ id, center, config }) => ({ id, x: center.x, y: center.y, ...config })),
       traces: objects
         .filter((object): object is Trace => object.type === "trace")
         .map(({ id, startPadId, endPadId, width, waypoints, points }) => ({
@@ -75,6 +89,17 @@ export function deserializeScene(document: CircuitDocument): SceneObject[] {
     width: pad.width,
     height: pad.height,
   }));
+  const dips: Dip[] = (document.circuit.dips ?? []).map((dip) => {
+    const center = point(`${dip.id}-center`, dip);
+    const config = {
+      padCount: dip.padCount,
+      padWidth: dip.padWidth,
+      padHeight: dip.padHeight,
+      columnSpacing: dip.columnSpacing,
+      pitch: dip.pitch,
+    };
+    return { id: dip.id, type: "dip", center, config, pins: createDipPins(dip.id, center, config) };
+  });
   const traces: Trace[] = document.circuit.traces.map((trace) => ({
     id: trace.id,
     type: "trace",
@@ -85,7 +110,7 @@ export function deserializeScene(document: CircuitDocument): SceneObject[] {
     points: trace.resolvedPath.map((coordinate, index) => point(`${trace.id}-point-${index}`, coordinate)),
   }));
 
-  return [...substrates, ...pads, ...traces];
+  return [...substrates, ...pads, ...dips, ...traces];
 }
 
 function isCircuitDocument(value: unknown): value is CircuitDocument {

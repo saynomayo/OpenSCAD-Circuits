@@ -13,6 +13,7 @@ The JSON document is intentionally independent of React and SVG. Objects are gro
   "circuit": {
     "substrates": [{ "id": "substrate-1", "x": 50, "y": 50, "width": 500, "height": 300 }],
     "pads": [{ "id": "pad-1", "x": 150, "y": 200, "width": 50, "height": 50 }],
+    "dips": [{ "id": "dip-1", "x": 300, "y": 200, "padCount": 8, "padWidth": 28, "padHeight": 14, "columnSpacing": 100, "pitch": 36 }],
     "traces": [{
       "id": "trace-1",
       "startPadId": "pad-1",

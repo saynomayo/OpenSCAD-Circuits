@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { InformationPanel } from "./components/InformationPanel";
 import { Toolbar } from "./components/Toolbar";
 import "./styling/App.css"
-import type { Point } from "./model/geometry";
-import { buildTracePath } from "./model/geometry";
+import type { DipConfig, Point } from "./model/geometry";
+import { buildTracePath, createDipPins, DEFAULT_DIP_CONFIG, findPad } from "./model/geometry";
 import { downloadScene, loadStoredScene, storeScene } from "./model/scene";
 
 type TraceDraft = {
@@ -13,13 +13,14 @@ type TraceDraft = {
   waypoints: Point[];
 };
 
-type Tool = "select" | "pad" | "trace" | "delete";
+type Tool = "select" | "pad" | "dip" | "trace" | "delete";
 
 function App() {
   const [scene, setScene] = useState(() => loadStoredScene() ?? sampleScene);
-  const [selectedObjectID, setSelectedObject] = useState<string | null>(null);
-  const selectedObject = scene.find((object) => selectedObjectID === object.id);
-  const [activeTool, setActiveTool] = useState<Tool>("select");
+  const [selectedObjectIDs, setSelectedObjectIDs] = useState<string[]>([]);
+  const selectedObjects = scene.filter((object) => selectedObjectIDs.includes(object.id));
+  const [activeTool, setActiveTool] = useState<Tool | null>("select");
+  const [dipToolConfig, setDipToolConfig] = useState<DipConfig>({ ...DEFAULT_DIP_CONFIG });
   const [traceDraft, setTraceDraft] = useState<TraceDraft | null>(null);
   const nextObjectNumber = useRef(
     scene.reduce((highest, object) => {
@@ -33,8 +34,28 @@ function App() {
   }, [scene]);
 
   function selectTool(tool: Tool) {
-    if (tool !== "trace") setTraceDraft(null);
-    setActiveTool(tool);
+    setActiveTool((currentTool) => {
+      const nextTool = currentTool === tool ? null : tool;
+      if (nextTool !== "trace") setTraceDraft(null);
+      if (nextTool !== "dip") setDipToolConfig({ ...DEFAULT_DIP_CONFIG });
+      return nextTool;
+    });
+  }
+
+  function selectObject(objectID: string, additive: boolean) {
+    setSelectedObjectIDs((selectedIDs) => {
+      if (!additive) return [objectID];
+      return selectedIDs.includes(objectID)
+        ? selectedIDs.filter((id) => id !== objectID)
+        : [...selectedIDs, objectID];
+    });
+  }
+
+  function selectObjects(objectIDs: string[], additive: boolean) {
+    setSelectedObjectIDs((selectedIDs) => additive
+      ? [...new Set([...selectedIDs, ...objectIDs])]
+      : objectIDs
+    );
   }
 
   const deleteObject = useCallback((objectID: string) => {
@@ -47,22 +68,30 @@ function App() {
             && (object.startPadId === objectID || object.endPadId === objectID))
         );
       }
+      if (target?.type === "dip") {
+        const pinIDs = new Set(target.pins.map((pin) => pin.id));
+        return objects.filter((object) =>
+          object.id !== objectID
+          && !(object.type === "trace"
+            && (pinIDs.has(object.startPadId) || pinIDs.has(object.endPadId)))
+        );
+      }
       return objects.filter((object) => object.id !== objectID);
     });
-    setSelectedObject(null);
+    setSelectedObjectIDs([]);
     setTraceDraft((draft) => draft?.startPadId === objectID ? null : draft);
   }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Delete" || selectedObjectID === null) return;
+      if (event.key !== "Delete" || selectedObjectIDs.length === 0) return;
       event.preventDefault();
-      deleteObject(selectedObjectID);
+      selectedObjectIDs.forEach(deleteObject);
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteObject, selectedObjectID]);
+  }, [deleteObject, selectedObjectIDs]);
 
   function placeObject(x: number, y: number) {
     if (activeTool === "pad") {
@@ -77,7 +106,24 @@ function App() {
           height: 50,
         },
       ]);
-      setSelectedObject(id);
+      setSelectedObjectIDs([id]);
+      return;
+    }
+
+    if (activeTool === "dip") {
+      const id = `dip-${nextObjectNumber.current++}`;
+      const center = { id: `${id}-center`, x, y };
+      setScene((objects) => [
+        ...objects,
+        {
+          id,
+          type: "dip",
+          center,
+          config: { ...dipToolConfig },
+          pins: createDipPins(id, center, dipToolConfig),
+        },
+      ]);
+      setSelectedObjectIDs([id]);
       return;
     }
 
@@ -92,21 +138,20 @@ function App() {
   function connectPad(padID: string) {
     if (activeTool !== "trace") return;
 
-    const pad = scene.find((object) => object.id === padID && object.type === "pad");
-    if (pad?.type !== "pad") return;
+    const pad = findPad(scene, padID);
+    if (pad === undefined) return;
 
     if (traceDraft === null) {
       setTraceDraft({ startPadId: padID, waypoints: [] });
-      setSelectedObject(padID);
+      const owner = scene.find((object) => object.id === padID || (object.type === "dip" && object.pins.some((pin) => pin.id === padID)));
+      setSelectedObjectIDs(owner ? [owner.id] : []);
       return;
     }
 
     if (traceDraft.startPadId === padID) return;
 
-    const startPad = scene.find(
-      (object) => object.id === traceDraft.startPadId && object.type === "pad",
-    );
-    if (startPad?.type !== "pad") {
+    const startPad = findPad(scene, traceDraft.startPadId);
+    if (startPad === undefined) {
       setTraceDraft(null);
       return;
     }
@@ -127,20 +172,26 @@ function App() {
       },
     ]);
     setTraceDraft(null);
-    setSelectedObject(id);
+    setSelectedObjectIDs([id]);
   }
 
   function moveObject(objectID: string, dx: number, dy: number) {
+    const movingIDs = selectedObjectIDs.includes(objectID) ? selectedObjectIDs : [objectID];
     setScene((objects) => {
       const movedObjects = objects.map((object) => {
-        if (object.id === objectID && object.type === "pad") {
+        if (movingIDs.includes(object.id) && object.type === "pad") {
           return {
             ...object,
             center: { ...object.center, x: object.center.x + dx, y: object.center.y + dy },
           };
         }
 
-        if (object.id === objectID && object.type === "trace") {
+        if (movingIDs.includes(object.id) && object.type === "dip") {
+          const center = { ...object.center, x: object.center.x + dx, y: object.center.y + dy };
+          return { ...object, center, pins: createDipPins(object.id, center, object.config) };
+        }
+
+        if (movingIDs.includes(object.id) && object.type === "trace") {
           const baseWaypoints = object.waypoints.length > 0
             ? object.waypoints
             : [{
@@ -162,13 +213,32 @@ function App() {
 
       return movedObjects.map((object) => {
         if (object.type !== "trace") return object;
-        const startPad = movedObjects.find((candidate) => candidate.id === object.startPadId);
-        const endPad = movedObjects.find((candidate) => candidate.id === object.endPadId);
-        if (startPad?.type !== "pad" || endPad?.type !== "pad") return object;
+        const startPad = findPad(movedObjects, object.startPadId);
+        const endPad = findPad(movedObjects, object.endPadId);
+        if (startPad === undefined || endPad === undefined) return object;
         return {
           ...object,
           points: buildTracePath(startPad, endPad, object.waypoints, object.id),
         };
+      });
+    });
+  }
+
+  function updateDip(dipID: string, changes: Partial<DipConfig>) {
+    setScene((objects) => {
+      const updated = objects.map((object) => {
+        if (object.id !== dipID || object.type !== "dip") return object;
+        const config = { ...object.config, ...changes };
+        return { ...object, config, pins: createDipPins(object.id, object.center, config) };
+      });
+      return updated.filter((object) => object.type !== "trace"
+        || (findPad(updated, object.startPadId) !== undefined && findPad(updated, object.endPadId) !== undefined)
+      ).map((object) => {
+        if (object.type !== "trace") return object;
+        const startPad = findPad(updated, object.startPadId);
+        const endPad = findPad(updated, object.endPadId);
+        if (startPad === undefined || endPad === undefined) return object;
+        return { ...object, points: buildTracePath(startPad, endPad, object.waypoints, object.id) };
       });
     });
   }
@@ -182,25 +252,26 @@ function App() {
         </div>
       </div>
       <div className="toolbar-layer">
-        <Toolbar toolbarClickCallback={selectTool} selectedTool={activeTool} exportCallback={() => downloadScene(scene)}/>
+        <Toolbar toolbarClickCallback={selectTool} selectedTool={activeTool} exportCallback={() => downloadScene(scene)} dipConfig={dipToolConfig} dipConfigCallback={setDipToolConfig}/>
       </div>
       <aside className="panel-layer">
-        <InformationPanel object={selectedObject} activeTool={activeTool} traceStartPadID={traceDraft?.startPadId ?? null}/>
+        <InformationPanel objects={selectedObjects} activeTool={activeTool} traceStartPadID={traceDraft?.startPadId ?? null} dipUpdateCallback={updateDip}/>
       </aside>
       <main className="workspace-canvas">
         <Canvas
           objects={scene}
           activeTool={activeTool}
-          selectedObjectID={selectedObjectID}
+          selectedObjectIDs={selectedObjectIDs}
           traceDraft={traceDraft}
-          objectSelectedCallback={setSelectedObject}
+          objectSelectedCallback={selectObject}
+          boxSelectionCallback={selectObjects}
           canvasClickCallback={placeObject}
           padConnectionCallback={connectPad}
           objectDeleteCallback={deleteObject}
           objectMoveCallback={moveObject}
         />
       </main>
-      <div className="canvas-hint">Scroll to zoom · Drag empty space or hold Space to pan</div>
+      <div className="canvas-hint">Scroll to zoom · No tool: drag to pan · Select: drag a box or Ctrl-click</div>
     </div>
   );
 }

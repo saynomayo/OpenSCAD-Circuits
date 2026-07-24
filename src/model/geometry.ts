@@ -30,8 +30,63 @@ export type Point = {
     points: Point[];
     width: number;
   };
+
+  export type DipConfig = {
+    padCount: number;
+    padWidth: number;
+    padHeight: number;
+    columnSpacing: number;
+    pitch: number;
+  };
+
+  export type Dip = {
+    id: string;
+    type: "dip";
+    center: Point;
+    config: DipConfig;
+    pins: Pad[];
+  };
   
-  export type SceneObject = Substrate | Pad | Trace;
+  export type SceneObject = Substrate | Pad | Trace | Dip;
+
+  export const DEFAULT_DIP_CONFIG: DipConfig = {
+    padCount: 8,
+    padWidth: 28,
+    padHeight: 14,
+    columnSpacing: 100,
+    pitch: 36,
+  };
+
+  export function createDipPins(dipID: string, center: Point, config: DipConfig): Pad[] {
+    const rows = Math.max(1, Math.floor(config.padCount / 2));
+    return Array.from({ length: rows * 2 }, (_, index) => {
+      const column = index < rows ? 0 : 1;
+      const row = column === 0 ? index : rows * 2 - index - 1;
+      const pinNumber = index + 1;
+      return {
+        id: `${dipID}-pin-${pinNumber}`,
+        type: "pad" as const,
+        center: {
+          id: `${dipID}-pin-${pinNumber}-center`,
+          x: center.x + (column === 0 ? -1 : 1) * config.columnSpacing / 2,
+          y: center.y + (row - (rows - 1) / 2) * config.pitch,
+        },
+        width: config.padWidth,
+        height: config.padHeight,
+      };
+    });
+  }
+
+  export function findPad(objects: SceneObject[], padID: string): Pad | undefined {
+    for (const object of objects) {
+      if (object.type === "pad" && object.id === padID) return object;
+      if (object.type === "dip") {
+        const pin = object.pins.find((candidate) => candidate.id === padID);
+        if (pin) return pin;
+      }
+    }
+    return undefined;
+  }
 
   export function padEdgePoint(pad: Pad, toward: Point): Point {
     const dx = toward.x - pad.center.x;

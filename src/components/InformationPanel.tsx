@@ -1,10 +1,11 @@
-import type { SceneObject } from "../model/geometry";
+import type { DipConfig, SceneObject } from "../model/geometry";
 import "../styling/InformationPanel.css"
 
 type InformationPanelProps = {
-    object: SceneObject | undefined;
-    activeTool: "select" | "pad" | "trace" | "delete";
+    objects: SceneObject[];
+    activeTool: "select" | "pad" | "dip" | "trace" | "delete" | null;
     traceStartPadID: string | null;
+    dipUpdateCallback: (id: string, changes: Partial<DipConfig>) => void;
 };
 
 function Field({ label, value }: { label: string; value: number }) {
@@ -16,7 +17,17 @@ function Field({ label, value }: { label: string; value: number }) {
     );
 }
 
-export function InformationPanel({object, activeTool, traceStartPadID}: InformationPanelProps) {
+function EditableField({ label, value, min = 1, step = 1, onChange }: { label: string; value: number; min?: number; step?: number; onChange: (value: number) => void }) {
+    return (
+        <div className="field">
+            <label>{label}</label>
+            <input className="field-value editable" type="number" value={value} min={min} step={step} onChange={(event) => onChange(Number(event.target.value))} />
+        </div>
+    );
+}
+
+export function InformationPanel({objects, activeTool, traceStartPadID, dipUpdateCallback}: InformationPanelProps) {
+    const object = objects.length === 1 ? objects[0] : undefined;
     return (
         <section className="inspector" aria-label="Object inspector">
             <header className="inspector-header">
@@ -24,7 +35,7 @@ export function InformationPanel({object, activeTool, traceStartPadID}: Informat
                     <p className="inspector-eyebrow">Workspace</p>
                     <h2 className="inspector-title">Object Inspector</h2>
                 </div>
-                <span className="tool-status">{activeTool}</span>
+                <span className="tool-status">{activeTool ?? "no tool"}</span>
             </header>
             <div className="inspector-body">
                 {activeTool === "trace" && (
@@ -36,7 +47,19 @@ export function InformationPanel({object, activeTool, traceStartPadID}: Informat
                         </div>
                     </div>
                 )}
-                {object === undefined ? (
+                {objects.length > 1 ? (
+                    <div className="multi-selection">
+                        <p className="property-label">Selection · {objects.length} objects</p>
+                        <ul>
+                            {objects.map((selectedObject) => (
+                                <li key={selectedObject.id}>
+                                    <span className="object-id">{selectedObject.id}</span>
+                                    <span className="object-type">{selectedObject.type}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : object === undefined ? (
                     <div className="empty-state">
                         <div className="empty-state-icon">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="m5 3 13 8-6 2-3 6-4-16Z" /></svg>
@@ -76,6 +99,26 @@ export function InformationPanel({object, activeTool, traceStartPadID}: Informat
                                     <Field label="Height" value={object.height} />
                                 </div>
                             </div>
+                        )}
+
+                        {object.type === "dip" && (
+                            <>
+                                <div className="property-section">
+                                    <p className="property-label">Package geometry</p>
+                                    <div className="property-grid">
+                                        <EditableField label="Pad count" value={object.config.padCount} min={4} step={2} onChange={(value) => dipUpdateCallback(object.id, { padCount: Math.max(4, Math.round(value / 2) * 2) })} />
+                                        <EditableField label="Pitch" value={object.config.pitch} onChange={(value) => dipUpdateCallback(object.id, { pitch: Math.max(1, value) })} />
+                                        <EditableField label="Row spacing" value={object.config.columnSpacing} onChange={(value) => dipUpdateCallback(object.id, { columnSpacing: Math.max(1, value) })} />
+                                        <span />
+                                        <EditableField label="Pad width" value={object.config.padWidth} onChange={(value) => dipUpdateCallback(object.id, { padWidth: Math.max(1, value) })} />
+                                        <EditableField label="Pad height" value={object.config.padHeight} onChange={(value) => dipUpdateCallback(object.id, { padHeight: Math.max(1, value) })} />
+                                    </div>
+                                </div>
+                                <div className="property-section">
+                                    <p className="property-label">Pins · {object.pins.length}</p>
+                                    <div className="connection-pair"><span>{object.pins[0]?.id}</span><span>…</span><span>{object.pins.at(-1)?.id}</span></div>
+                                </div>
+                            </>
                         )}
 
                         {object.type === "trace" && (

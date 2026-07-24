@@ -133,6 +133,26 @@
   line-height: 1.45;
 }
 
+.multi-selection ul {
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.multi-selection li {
+  display: flex;
+  padding: 8px 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.multi-selection li:last-child {
+  border-bottom: 0;
+}
+
 .property-section + .property-section {
   margin-top: 17px;
   padding-top: 15px;
@@ -195,6 +215,15 @@
   border: 1px solid #dce3e9;
   border-radius: 7px;
   outline: none;
+}
+
+.field-value.editable {
+  background: #ffffff;
+}
+
+.field-value.editable:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(22, 135, 217, 0.1);
 }
 
 .trace-points {
